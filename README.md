@@ -67,8 +67,7 @@ function! LinkToCode() range
     redraw
     echom printf("Copied to clipboard: %s", link)
 endfunction
-command! -nargs=0 Link2Code call LinkToCode()
 
-nnoremap <leader><leader>l :LinkToCode<CR>
-vnoremap <leader><leader>l :LinkToCode<CR>
+nnoremap <leader><leader>l :call LinkToCode()<CR>
+vnoremap <leader><leader>l :call LinkToCode()<CR>
 ```
