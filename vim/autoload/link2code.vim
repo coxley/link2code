@@ -1,4 +1,4 @@
-function! link2code#LinkToCode() range
+function! LinkToCode() range
     let lineRange = printf("%d", line('.'))
     " If visual selection exists
     if a:lastline - a:firstline > 0

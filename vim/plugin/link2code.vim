@@ -7,6 +7,6 @@ if exists("g:loaded_link2code")
 endif
 let g:loaded_link2code = 1
 
-command! -nargs=0 Link2Code call link2code#LinkToCode()
+command! -nargs=0 Link2Code call LinkToCode()
 nnoremap <leader><leader>l :LinkToCode<CR>
 vnoremap <leader><leader>l :LinkToCode<CR>
