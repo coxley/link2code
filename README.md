@@ -25,6 +25,12 @@ rg 'search term' -n | link2code
 Flags:
       --colon-filenames   use this if you have filenames or directories with ':' in them - otherwise parsing will fail
   -h, --help              help for link2code
+
+> link2code README.md link2code/link2code.go:3-16 ../codesearch/cs/main.go
+
+https://github.com/coxley/link2code/tree/e24d3cc/README.md
+https://github.com/coxley/link2code/tree/e24d3cc/link2code/link2code.go#L3-L16
+https://github.com/coxley/codesearch/tree/c0973ac/cs/main.go
 ```
 
 # Install 
