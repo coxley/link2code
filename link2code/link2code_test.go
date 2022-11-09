@@ -1,4 +1,4 @@
-package link2code
+package main
 
 import "testing"
 
