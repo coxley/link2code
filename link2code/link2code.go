@@ -103,8 +103,10 @@ func runCommand(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
-var filenameRe = regexp.MustCompile(`(:[0-9\-]+){1,2}`)
-var fallbackFilenameRe = regexp.MustCompile(`(:[0-9\-]+)+$`)
+var (
+	filenameRe         = regexp.MustCompile(`(:[0-9\-]+){1,2}`)
+	fallbackFilenameRe = regexp.MustCompile(`(:[0-9\-]+)+$`)
+)
 
 // splitFilename takes a filename that MAY have a start line number, end line
 // number, and/or column number appended to the end.
@@ -120,7 +122,6 @@ var fallbackFilenameRe = regexp.MustCompile(`(:[0-9\-]+)+$`)
 // path/to/file.txt:1-5
 // path/to/file.txt:1:2
 func splitFilename(text string, fallback bool) (string, int, int) {
-
 	// The primary regex assumes no colons will be in the filepath.
 	//
 	// This is to support output from `rg` and other grep-like utilities that
@@ -150,7 +151,6 @@ func splitFilename(text string, fallback bool) (string, int, int) {
 	if strings.Count(suffix, ":") == 1 {
 		s := strings.Split(suffix, ":")[0]
 		start, err := strconv.Atoi(s)
-
 		// TODO: This should probably not panic but I'm being lazy rn
 		if err != nil {
 			panic(err)
@@ -289,7 +289,7 @@ func (g *git) upstreamRevision(cwd string) (string, error) {
 		}
 	}()
 
-	remotes, err := g.run(cwd, "rev-list", "--abbrev-commit", "--remotes")
+	remotes, err := g.run(cwd, "rev-list", "--abbrev-commit", "--abbrev=10", "--remotes")
 	if err != nil {
 		return "", err
 	}
@@ -299,7 +299,7 @@ func (g *git) upstreamRevision(cwd string) (string, error) {
 		upstreamMap[rev] = struct{}{}
 	}
 
-	descendants, err := g.run(cwd, "rev-list", "--abbrev-commit", "HEAD")
+	descendants, err := g.run(cwd, "rev-list", "--abbrev-commit", "--abbrev=10", "HEAD")
 	if err != nil {
 		return "", err
 	}
