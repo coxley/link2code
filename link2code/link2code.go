@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"io"
 	"io/ioutil"
 	"net/url"
 	"os"
@@ -10,6 +11,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/fatih/color"
 	"github.com/spf13/cobra"
@@ -20,6 +22,8 @@ func main() {
 		os.Exit(2)
 	}
 }
+
+var verbose bool
 
 func newCommand() *cobra.Command {
 	root := cobra.Command{
@@ -44,6 +48,7 @@ rg 'search term' -n | link2code
 	}
 
 	root.Flags().Bool("colon-filenames", false, "use this if you have filenames or directories with ':' in them - otherwise parsing will fail")
+	root.Flags().BoolVarP(&verbose, "verbose", "v", false, "write debug details to stderr")
 	return &root
 }
 
@@ -54,6 +59,16 @@ func withinPipeline() bool {
 		panic(err)
 	}
 	return fi.Mode()&os.ModeNamedPipe != 0
+}
+
+func profile[V any](w io.Writer, msg string, cb func() V) V {
+	start := time.Now()
+	cb()
+	defer func() {
+		if verbose {
+			fmt.Fprintf(w, msg+"\n", time.Since(start))
+		}
+	}()
 }
 
 func runCommand(cmd *cobra.Command, args []string) error {
@@ -120,6 +135,13 @@ var fallbackFilenameRe = regexp.MustCompile(`(:[0-9\-]+)+$`)
 // path/to/file.txt:1-5
 // path/to/file.txt:1:2
 func splitFilename(text string, fallback bool) (string, int, int) {
+	startTime := time.Now()
+	defer func() {
+		if !verbose {
+			return
+		}
+		fmt.Fprintf(os.Stderr, "splitting filename: %s\n", time.Since(startTime))
+	}()
 
 	// The primary regex assumes no colons will be in the filepath.
 	//
@@ -183,6 +205,14 @@ func splitFilename(text string, fallback bool) (string, int, int) {
 }
 
 func getFileURL(file string) (*url.URL, error) {
+	start := time.Now()
+	defer func() {
+		if !verbose {
+			return
+		}
+		fmt.Fprintf(os.Stderr, "making file url: %s\n", time.Since(start))
+	}()
+
 	absFile, err := filepath.Abs(file)
 	if err != nil {
 		return nil, fmt.Errorf("couldn't locate absolute path to %s", file)
@@ -233,6 +263,14 @@ func (g *git) run(cwd string, args ...string) (string, error) {
 }
 
 func (g *git) worktree(cwd string) (string, error) {
+	start := time.Now()
+	defer func() {
+		if !verbose {
+			return
+		}
+		fmt.Fprintf(os.Stderr, "getting worktree: %s\n", time.Since(start))
+	}()
+
 	if dir, ok := g.worktreeCache[cwd]; ok {
 		return dir, nil
 	}
@@ -278,6 +316,14 @@ func (g *git) worktree(cwd string) (string, error) {
 // We do this by listing all upsream revisions, all revisions descending from
 // HEAD, then finding the earliest commonality
 func (g *git) upstreamRevision(cwd string) (string, error) {
+	start := time.Now()
+	defer func() {
+		if !verbose {
+			return
+		}
+		fmt.Fprintf(os.Stderr, "getting upstream revision: %s\n", time.Since(start))
+	}()
+
 	if rev, ok := g.revCache[cwd]; ok {
 		return rev, nil
 	}
@@ -289,15 +335,19 @@ func (g *git) upstreamRevision(cwd string) (string, error) {
 		}
 	}()
 
+	t1 := time.Now()
 	remotes, err := g.run(cwd, "rev-list", "--abbrev-commit", "--remotes")
 	if err != nil {
 		return "", err
 	}
+	fmt.Fprintf(os.Stderr, "getting remotes: %s\n", time.Since(t1))
 
+	t1 = time.Now()
 	upstreamMap := map[string]struct{}{}
 	for _, rev := range strings.Fields(string(remotes)) {
 		upstreamMap[rev] = struct{}{}
 	}
+	fmt.Fprintf(os.Stderr, "creating upstream: %s\n", time.Since(t1))
 
 	descendants, err := g.run(cwd, "rev-list", "--abbrev-commit", "HEAD")
 	if err != nil {
@@ -315,6 +365,14 @@ func (g *git) upstreamRevision(cwd string) (string, error) {
 }
 
 func (g *git) baseURL(cwd string) (*url.URL, error) {
+	start := time.Now()
+	defer func() {
+		if !verbose {
+			return
+		}
+		fmt.Fprintf(os.Stderr, "crafting base url: %s\n", time.Since(start))
+	}()
+
 	if baseURL, ok := g.baseURLCache[cwd]; ok {
 		return baseURL, nil
 	}
