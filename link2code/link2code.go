@@ -44,6 +44,7 @@ rg 'search term' -n | link2code
 	}
 
 	root.Flags().Bool("colon-filenames", false, "use this if you have filenames or directories with ':' in them - otherwise parsing will fail")
+	root.Flags().Bool("blame", false, "use this to return direct links to blame view")
 	return &root
 }
 
@@ -72,12 +73,14 @@ func runCommand(cmd *cobra.Command, args []string) error {
 
 	var success bool
 	colonFilenames, _ := cmd.Flags().GetBool("colon-filenames")
+	blame, _ := cmd.Flags().GetBool("blame")
+
 	// TODO: concurrency? Has a stair-step effect where the first git queries
 	// of a new repo blocks the line
 	for _, file := range files {
 		filename, start, end := splitFilename(file, colonFilenames)
 
-		url, err := getFileURL(filename)
+		url, err := getFileURL(filename, blame)
 		if err != nil {
 			fmt.Fprintln(os.Stderr, color.YellowString("%s: %v", file, err))
 			continue
@@ -182,7 +185,7 @@ func splitFilename(text string, fallback bool) (string, int, int) {
 	return filename, start, 0
 }
 
-func getFileURL(file string) (*url.URL, error) {
+func getFileURL(file string, blame bool) (*url.URL, error) {
 	absFile, err := filepath.Abs(file)
 	if err != nil {
 		return nil, fmt.Errorf("couldn't locate absolute path to %s", file)
@@ -204,7 +207,11 @@ func getFileURL(file string) (*url.URL, error) {
 		return nil, err
 	}
 
-	revURL := baseURL.JoinPath("tree", rev)
+	mode := "tree"
+	if blame {
+		mode = "blame"
+	}
+	revURL := baseURL.JoinPath(mode, rev)
 
 	return revURL.JoinPath(strings.Replace(absFile, workTree, "", 1)), nil
 }
@@ -332,6 +339,7 @@ func (g *git) baseURL(cwd string) (*url.URL, error) {
 	}
 
 	origin = strings.TrimSpace(origin)
+	origin = strings.TrimSuffix(origin, ".git")
 
 	// TODO: support GHE
 	if !strings.Contains(origin, "github.com") {
