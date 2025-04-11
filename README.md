@@ -46,12 +46,12 @@ This is great for Vim.
 Because of how simple it is, I haven't created an installable plugin. Feel free
 to copy-paste what I use.
 
-This maps `<leader><leader>l` copy the GitHub URL to your clipboard. The URL is
+This maps `<leader><leader>l` copy the GitHub URL to your clipboard, with `<leader><leader>b` doing the same for blame. The URL is
 also printed out. Works for both current line in normal mode and visually
 selected regions.
 
 ```vim
-function! LinkToCode() range
+function! LinkToCode(blame = 0) range
     let lineRange = printf("%d", line('.'))
     " If visual selection exists
     if a:lastline - a:firstline > 0
@@ -62,6 +62,9 @@ function! LinkToCode() range
     let filePos = printf("%s:%s", filePath, lineRange)
 
     let cmd = printf("link2code %s 2> /dev/null", filePos)
+    if a:blame
+        let cmd = printf("link2code --blame %s 2> /dev/null", filePos)
+    endif
     let link = system(cmd)[:-2]  " ^@ is printed at the end of system()
     let @+ = link
     redraw
@@ -70,4 +73,6 @@ endfunction
 
 nnoremap <leader><leader>l :call LinkToCode()<CR>
 vnoremap <leader><leader>l :call LinkToCode()<CR>
+nnoremap <leader><leader>b :call LinkToCode(v:true)<CR>
+vnoremap <leader><leader>b :call LinkToCode(v:true)<CR>
 ```
