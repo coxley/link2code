@@ -300,15 +300,16 @@ func (g *git) upstreamRevision(cwd string) (string, error) {
 	if err != nil {
 		return "", err
 	}
+	localOnly = strings.TrimSpace(localOnly)
 
 	var selector string
-	lines := strings.Split(strings.TrimSpace(localOnly), "\n")
-	if len(lines) > 0 {
+	lines := strings.Split(localOnly, "\n")
+	if len(lines) == 1 && lines[0] == localOnly {
+		selector = "HEAD"
+	} else {
 		line := lines[len(lines)-1]
 		// <rev> <msg>
 		selector = strings.Fields(line)[0] + "~1"
-	} else {
-		selector = "HEAD"
 	}
 	rev, err := g.run(cwd, "rev-list", "--abbrev-commit", "--abbrev=10", "--max-count=1", selector)
 	if err != nil {
