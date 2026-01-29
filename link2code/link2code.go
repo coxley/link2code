@@ -296,29 +296,25 @@ func (g *git) upstreamRevision(cwd string) (string, error) {
 		}
 	}()
 
-	remotes, err := g.run(cwd, "rev-list", "--abbrev-commit", "--abbrev=10", "--remotes")
+	localOnly, err := g.run(cwd, "log", "HEAD", "--oneline", "--not", "--remotes")
 	if err != nil {
 		return "", err
 	}
 
-	upstreamMap := map[string]struct{}{}
-	for _, rev := range strings.Fields(string(remotes)) {
-		upstreamMap[rev] = struct{}{}
+	var selector string
+	lines := strings.Split(strings.TrimSpace(localOnly), "\n")
+	if len(lines) > 0 {
+		line := lines[len(lines)-1]
+		// <rev> <msg>
+		selector = strings.Fields(line)[0] + "~1"
+	} else {
+		selector = "HEAD"
 	}
-
-	descendants, err := g.run(cwd, "rev-list", "--abbrev-commit", "--abbrev=10", "HEAD")
+	rev, err := g.run(cwd, "rev-list", "--abbrev-commit", "--abbrev=10", "--max-count=1", selector)
 	if err != nil {
 		return "", err
 	}
-
-	for _, rev := range strings.Fields(string(descendants)) {
-		if _, ok := upstreamMap[rev]; ok {
-			result = rev
-			return result, nil
-		}
-	}
-
-	return "", fmt.Errorf("couldn't find any local revision that is also upstream")
+	return strings.TrimSpace(rev), nil
 }
 
 func (g *git) baseURL(cwd string) (*url.URL, error) {
