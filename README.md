@@ -36,7 +36,7 @@ https://github.com/coxley/codesearch/tree/c0973ac/cs/main.go
 # Install 
 
 ```
-go install github.com/coxley/link2code/link2code@latest
+go install github.com/coxley/link2code@latest
 ```
 
 # Vim

@@ -2,7 +2,7 @@ package main
 
 import (
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/url"
 	"os"
 	"os/exec"
@@ -60,7 +60,7 @@ func withinPipeline() bool {
 func runCommand(cmd *cobra.Command, args []string) error {
 	files := args
 	if withinPipeline() {
-		content, err := ioutil.ReadAll(os.Stdin)
+		content, err := io.ReadAll(os.Stdin)
 		if err != nil {
 			return err
 		}
@@ -282,8 +282,9 @@ func (g *git) worktree(cwd string) (string, error) {
 
 // upstreamRevision finds the most recent rev from HEAD that is upstream
 //
-// We do this by listing all upsream revisions, all revisions descending from
-// HEAD, then finding the earliest commonality
+// We do this by finding the oldest local-only revision from HEAD, then grabbing the
+// commit before that divergence point. If there is no local-only commit from HEAD, we
+// just use HEAD.
 func (g *git) upstreamRevision(cwd string) (string, error) {
 	if rev, ok := g.revCache[cwd]; ok {
 		return rev, nil
