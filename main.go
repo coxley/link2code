@@ -191,7 +191,16 @@ func getFileURL(file string, blame bool) (*url.URL, error) {
 		return nil, fmt.Errorf("couldn't locate absolute path to %s", file)
 	}
 
-	fileDir := filepath.Dir(absFile)
+	// Work around cases where the repo is located under a symlink
+	//
+	// absFile: ~/company/repo1/file
+	// realFile: ~/Code/github.com/company/repo1/file
+	realFile, err := filepath.EvalSymlinks(absFile)
+	if err != nil {
+		return nil, fmt.Errorf("couldn't resolve symlinks for %s", file)
+	}
+
+	fileDir := filepath.Dir(realFile)
 	workTree, err := Git.worktree(fileDir)
 	if err != nil {
 		return nil, err
@@ -213,7 +222,7 @@ func getFileURL(file string, blame bool) (*url.URL, error) {
 	}
 	revURL := baseURL.JoinPath(mode, rev)
 
-	return revURL.JoinPath(strings.Replace(absFile, workTree, "", 1)), nil
+	return revURL.JoinPath(strings.Replace(realFile, workTree, "", 1)), nil
 }
 
 var Git = git{
