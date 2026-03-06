@@ -201,17 +201,17 @@ func getFileURL(file string, blame bool) (*url.URL, error) {
 	}
 
 	fileDir := filepath.Dir(realFile)
-	workTree, err := Git.worktree(fileDir)
+	state, err := Git.repoState(fileDir)
 	if err != nil {
 		return nil, err
 	}
 
-	rev, err := Git.upstreamRevision(workTree)
+	rev, err := Git.upstreamRevision(fileDir)
 	if err != nil {
 		return nil, err
 	}
 
-	baseURL, err := Git.baseURL(workTree)
+	baseURL, err := Git.baseURL(state.gitCommonDir)
 	if err != nil {
 		return nil, err
 	}
@@ -222,17 +222,21 @@ func getFileURL(file string, blame bool) (*url.URL, error) {
 	}
 	revURL := baseURL.JoinPath(mode, rev)
 
-	return revURL.JoinPath(strings.Replace(realFile, workTree, "", 1)), nil
+	repoDir, err := state.repoDir()
+	if err != nil {
+		return nil, err
+	}
+	return revURL.JoinPath(strings.Replace(realFile, repoDir, "", 1)), nil
 }
 
 var Git = git{
-	map[string]string{},
+	map[string]*repoState{},
 	map[string]string{},
 	map[string]*url.URL{},
 }
 
 type git struct {
-	worktreeCache map[string]string
+	worktreeCache map[string]*repoState
 	revCache      map[string]string
 	baseURLCache  map[string]*url.URL
 }
@@ -248,45 +252,87 @@ func (g *git) run(cwd string, args ...string) (string, error) {
 	return string(out), nil
 }
 
-func (g *git) worktree(cwd string) (string, error) {
+func (g *git) commonDir(cwd string) (string, error) {
+	dir, err := g.run(cwd, "rev-parse", "--path-format=absolute", "--git-common-dir")
+	if err != nil {
+		return "", err
+	}
+	dir = strings.TrimSpace(dir)
+
+	// Submodules can populate core.worktree, while 'git worktree add' makes '.git'
+	// a file pointing to its git dir under the root
+	workTree, err := g.run(cwd, "config", "--get", "core.worktree")
+	if err != nil || workTree == "" {
+		return dir, nil
+	}
+
+	if !filepath.IsAbs(workTree) {
+		workTree, err = filepath.Abs(filepath.Join(dir, workTree))
+		if err != nil {
+			return "", fmt.Errorf("resolving worktree abs path: %w", err)
+		}
+	}
+	return filepath.Dir(workTree), nil
+}
+
+func (g *git) stateDir(cwd string) (string, error) {
+	dir, err := g.run(cwd, "rev-parse", "--path-format=absolute", "--git-dir")
+	if err != nil {
+		return "", err
+	}
+	return strings.TrimSpace(dir), nil
+}
+
+type repoState struct {
+	gitDir       string
+	gitCommonDir string
+	isWorktree   bool
+}
+
+func (rs repoState) repoDir() (string, error) {
+	if !rs.isWorktree {
+		return filepath.Dir(rs.gitDir), nil
+	}
+	// A worktree's git dir is located inside the root's state, but has a file that
+	// points to where the worktree's directory is.
+	//
+	// Example:
+	//
+	//	gitDir: path/to/root/.git/worktrees/<name>/.git
+	//	file: path/to/root/.git/worktrees/<name>/.git/gitdir
+	//	content: path/to/worktrees/<name>/.git
+	b, err := os.ReadFile(filepath.Join(rs.gitDir, "gitdir"))
+	if err != nil {
+		return "", err
+	}
+	return filepath.Dir(string(b)), nil
+}
+
+func (g *git) repoState(cwd string) (result *repoState, err error) {
 	if dir, ok := g.worktreeCache[cwd]; ok {
 		return dir, nil
 	}
 
-	var result string
 	defer func() {
-		if result != "" {
+		if result != nil {
 			g.worktreeCache[cwd] = result
 		}
 	}()
 
-	gitDir, err := g.run(cwd, "rev-parse", "--absolute-git-dir")
+	gitDir, err := g.stateDir(cwd)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
-	gitDir = strings.TrimSpace(gitDir)
 
-	workTree, err := g.run(cwd, "config", "--get", "core.worktree")
+	commonDir, err := g.commonDir(cwd)
 	if err != nil {
-		result = filepath.Dir(gitDir)
-		return result, nil
+		return nil, err
 	}
-	workTree = strings.TrimSpace(workTree)
-
-	// worktree is typically specified in git submodules
-	if workTree == "" {
-		result = filepath.Dir(gitDir)
-		return result, nil
-	}
-
-	// when worktree is present, it's relative to the git conifg
-	workTree, err = filepath.Abs(filepath.Join(gitDir, workTree))
-	if err != nil {
-		return "", err
-	}
-
-	result = workTree
-	return result, nil
+	return &repoState{
+		gitDir:       gitDir,
+		gitCommonDir: commonDir,
+		isWorktree:   gitDir != commonDir,
+	}, nil
 }
 
 // upstreamRevision finds the most recent rev from HEAD that is upstream
