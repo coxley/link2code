@@ -6,7 +6,7 @@ For every file given, it compares local revisions to those upstream. The most re
 common revision is used for the direct link. Line numbers, and ranges, are supported
 by appending ":start[-end]" to the filepath.
 
-Git submodules are supported. Files in trees that are not git repositories are skipped.
+Git submodules and worktrees are supported. Files in trees that are not git repositories are skipped.
 
 ```
 > link2code --help
@@ -43,36 +43,80 @@ go install github.com/coxley/link2code@latest
 
 This is great for Vim.
 
-Because of how simple it is, I haven't created an installable plugin. Feel free
-to copy-paste what I use.
+Because of how simple it is, I haven't created an installable plugin (though perhaps
+that's exactly why I should). Feel free to copy or modify what I use:
 
-This maps `<leader><leader>l` copy the GitHub URL to your clipboard, with `<leader><leader>b` doing the same for blame. The URL is
-also printed out. Works for both current line in normal mode and visually
-selected regions.
+- `<leader><leader>l`: Copy the Github Permalink to the clipboard
+- `<leader><leader>b`: Copy the Github Blame Permalink to the clipboard
+- `<leader>ol`: Copy the Github Permalink and open in your browser
+- `<leader>ob`: Copy the Github Blame Permalink and open in your browser
 
-```vim
-function! LinkToCode(blame = 0) range
-    let lineRange = printf("%d", line('.'))
-    " If visual selection exists
-    if a:lastline - a:firstline > 0
-        let lineRange = printf("%d-%d", a:firstline, a:lastline)
-    endif
+Works for both current line in normal mode and visually selected regions.
 
-    let filePath = expand("%:p")
-    let filePos = printf("%s:%s", filePath, lineRange)
+```lua
+local function link2code(opts)
+    opts = opts or {}
 
-    let cmd = printf("link2code %s 2> /dev/null", filePos)
-    if a:blame
-        let cmd = printf("link2code --blame %s 2> /dev/null", filePos)
-    endif
-    let link = system(cmd)[:-2]  " ^@ is printed at the end of system()
-    let @+ = link
-    redraw
-    echom printf("Copied to clipboard: %s", link)
-endfunction
+    local blame = opts.blame or false
+    local open = opts.open or false
 
-nnoremap <leader><leader>l :call LinkToCode()<CR>
-vnoremap <leader><leader>l :call LinkToCode()<CR>
-nnoremap <leader><leader>b :call LinkToCode(v:true)<CR>
-vnoremap <leader><leader>b :call LinkToCode(v:true)<CR>
+    -- If called from a user command with :range, opts has line1/line2
+    local line1 = opts.line1 or vim.fn.line(".")
+    local line2 = opts.line2 or line1
+
+    local line_range
+    if line2 > line1 then
+        line_range = string.format("%d-%d", line1, line2)
+    else
+        line_range = string.format("%d", line1)
+    end
+
+    local file_path = vim.fn.expand("%:p")
+    local file_pos = string.format("%s:%s", file_path, line_range)
+
+    local cmd
+    if blame then
+        cmd = string.format("link2code --blame %s 2> /dev/null", file_pos)
+    else
+        cmd = string.format("link2code %s 2> /dev/null", file_pos)
+    end
+
+    local link = vim.fn.system(cmd)
+    link = link:gsub("%s*$", "")
+
+    vim.fn.setreg("+", link)
+    vim.cmd.redraw()
+    vim.api.nvim_echo({ { "Copied to clipboard: " .. link, "None" } }, false, {})
+    if open and link ~= "" then
+        vim.ui.open(link)
+    end
+    return link
+end
+
+vim.api.nvim_create_user_command("LinkToCode", function(opts)
+    local open = false
+    local blame = false
+    for _, arg in ipairs(opts.fargs) do
+        if arg == "open" then
+            open = true
+        end
+        if arg == "blame" then
+            blame = true
+        end
+    end
+    link2code({
+        blame = blame,
+        open = open,
+        line1 = opts.line1,
+        line2 = opts.line2,
+    })
+end, {
+    range = true,
+    nargs = "*",
+})
+
+vim.keymap.set({ "n", "v" }, "<leader><leader>l", ":LinkToCode<CR>", options)
+vim.keymap.set({ "n", "v" }, "<leader><leader>b", ":LinkToCode blame<CR>", options)
+vim.keymap.set({ "n", "v" }, "<leader>ol", ":LinkToCode open<CR>", options)
+vim.keymap.set({ "n", "v" }, "<leader>ob", ":LinkToCode open blame<CR>", options)
 ```
